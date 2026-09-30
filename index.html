@@ -1,42 +1,673 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>C0RRUPT10N // chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --bg:#020202; --panel:rgba(10,10,12,0.6); --line:#1c1c1c; --text:#e6e6e6; --muted:#8a8a8a;
+    --cyan:#00fff2; --blue:#1e5bff; --red:#ff0844; --green:#39ff88;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    display:flex; flex-direction:column; overflow:hidden; position:relative;
+  }
+  .brand{font-family:'Orbitron',sans-serif;}
+  #noiseBg{ position:fixed; inset:0; width:100vw; height:100vh; z-index:0; transition:filter 0.4s; }
+  .glass{ background:var(--panel); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
 
-    <title>Friendroom</title>
+  #lockScreen{
+    position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center;
+    padding:20px; background:rgba(0,0,0,0.45);
+  }
+  .lock-card{
+    width:100%; max-width:380px; border:2px solid #000; border-radius:16px; padding:28px 26px;
+    box-shadow:0 0 24px rgba(30,91,255,0.2), inset 0 0 40px rgba(0,0,0,0.4); text-align:center;
+  }
+  .lock-card h2{ margin:0 0 6px; font-family:'Orbitron',sans-serif; font-size:16px; color:var(--cyan);
+    text-shadow:0 0 8px rgba(0,255,242,0.6); letter-spacing:0.04em; }
+  .lock-card p{ margin:0 0 18px; font-size:12.5px; color:var(--muted); }
+  #keyInput{
+    width:100%; background:#000; border:2px solid #000; color:var(--cyan); text-align:center;
+    letter-spacing:0.15em; font-family:'Orbitron',sans-serif; font-size:15px; padding:12px;
+    border-radius:8px; box-shadow:0 0 6px rgba(0,255,242,0.3); margin-bottom:12px;
+  }
+  #keyInput:focus{ outline:none; box-shadow:0 0 12px var(--cyan); }
+  #keyInput.shake{ animation:shake 0.35s; border-color:var(--red); box-shadow:0 0 10px var(--red); }
+  @keyframes shake{ 20%,60%{transform:translateX(-6px)} 40%,80%{transform:translateX(6px)} }
+  .lock-btn{
+    width:100%; background:var(--cyan); color:#000; border:2px solid #000; font-weight:700;
+    padding:11px; border-radius:8px; cursor:pointer; font-family:'Inter',sans-serif; font-size:13.5px;
+    box-shadow:0 0 8px var(--cyan); margin-bottom:8px;
+  }
+  .lock-btn:hover{ filter:brightness(1.1); }
+  .lock-btn.ghost{ background:transparent; color:var(--muted); box-shadow:none; font-weight:600; }
+  #keyErr{ font-size:11.5px; color:var(--red); margin-top:2px; min-height:14px; }
 
-    <link rel="stylesheet" href="style.css">
+  .acct-list{ display:flex; flex-direction:column; gap:10px; }
+  .acct-card{
+    display:flex; align-items:center; gap:12px; padding:12px 14px; border:2px solid #000;
+    border-radius:12px; cursor:pointer; text-align:left; background:rgba(30,91,255,0.06);
+    box-shadow:0 0 6px rgba(30,91,255,0.2); transition:transform 0.12s, box-shadow 0.12s;
+  }
+  .acct-card:hover{ transform:translateY(-1px); box-shadow:0 0 14px rgba(30,91,255,0.5); }
+  .acct-avatar{
+    width:48px; height:48px; border-radius:50%; flex-shrink:0; display:flex; align-items:center;
+    justify-content:center; font-family:'Orbitron',sans-serif; font-weight:800; font-size:15px;
+    background:#000; border:2px solid #000; color:var(--cyan); box-shadow:0 0 6px var(--cyan);
+  }
+  .acct-name{ font-family:'Orbitron',sans-serif; font-size:16px; color:var(--text); }
+  .acct-sub{ font-size:12px; color:var(--muted); margin-top:3px; }
+  #lockScreen.hidden{ display:none; }
+  .view{ display:none; } .view.show{ display:block; }
+
+  #app{ display:none; flex-direction:column; height:100%; position:relative; z-index:1; }
+  #app.show{ display:flex; }
+
+  header{
+    padding:12px 16px; padding-top:calc(12px + env(safe-area-inset-top,0px));
+    border-bottom:2px solid #000; box-shadow:0 1px 0 var(--cyan);
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    flex-shrink:0; flex-wrap:wrap;
+  }
+  header h1{
+    margin:0; font-size:21px; font-weight:800; letter-spacing:0.03em;
+    color:var(--cyan); text-shadow:0 0 6px rgba(0,255,242,0.6);
+    display:flex; align-items:center; gap:8px;
+  }
+  header h1 .dot{
+    width:8px; height:8px; border-radius:50%; background:var(--green);
+    box-shadow:0 0 6px var(--green), 0 0 0 2px #000;
+  }
+  .hdr-right{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+
+  #who{font-size:15px; color:var(--muted); font-weight:600;}
+  .pill-btn{
+    background:#000; border:2px solid #000; color:var(--muted);
+    font-size:13px; padding:6px 12px; border-radius:20px; cursor:pointer;
+    font-family:'Inter',sans-serif; font-weight:700; text-transform:uppercase; letter-spacing:0.04em;
+  }
+  .pill-btn:hover{ color:var(--cyan); box-shadow:0 0 6px var(--cyan); }
+
+  .toggle-wrap{ display:flex; align-items:center; gap:7px; }
+  .toggle-label{
+    font-family:'Orbitron',sans-serif; font-weight:800; font-size:10.5px;
+    letter-spacing:0.05em; color:var(--cyan); user-select:none; cursor:pointer;
+  }
+  .toggle-wrap.active .toggle-label{ color:var(--red); text-shadow:0 0 5px var(--red); }
+  .toggle-wrap.test.active .toggle-label{ color:var(--green); text-shadow:0 0 5px var(--green); }
+
+  .switch{
+    position:relative; width:46px; height:25px; border-radius:16px; cursor:pointer;
+    background:#000; border:2px solid var(--cyan); box-shadow:0 0 6px rgba(0,255,242,0.4);
+    padding:0; flex-shrink:0; transition:border-color 0.2s, box-shadow 0.2s;
+  }
+  .switch .knob{
+    position:absolute; top:1px; left:1px; width:17px; height:17px; border-radius:50%;
+    background:var(--cyan); box-shadow:0 0 6px var(--cyan), 0 0 0 2px #000;
+    transition:left 0.2s ease, background 0.2s ease;
+  }
+  .switch.active{ border-color:var(--red); box-shadow:0 0 10px var(--red); animation:pulse-red 1.4s ease-in-out infinite; }
+  .switch.active .knob{ left:22px; background:var(--red); box-shadow:0 0 8px var(--red), 0 0 0 2px #000; }
+  .switch.test.active{ border-color:var(--green); box-shadow:0 0 10px var(--green); animation:pulse-green 1.4s ease-in-out infinite; }
+  .switch.test.active .knob{ background:var(--green); box-shadow:0 0 8px var(--green), 0 0 0 2px #000; }
+  @keyframes pulse-red{ 0%,100%{box-shadow:0 0 6px var(--red);} 50%{box-shadow:0 0 16px var(--red);} }
+  @keyframes pulse-green{ 0%,100%{box-shadow:0 0 6px var(--green);} 50%{box-shadow:0 0 16px var(--green);} }
+
+  .toggle-wrap.mini{ gap:5px; flex-shrink:0; }
+  .toggle-wrap.mini .toggle-label{ font-size:8.5px; }
+  .switch.mini{ width:34px; height:19px; }
+  .switch.mini .knob{ width:13px; height:13px; }
+  .switch.mini.active .knob{ left:17px; }
+
+  #log{ flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:4px; }
+  .msg{ max-width:760px; width:100%; padding:6px 2px; line-height:1.5; font-size:14.5px;
+        display:flex; gap:10px; align-items:flex-start; animation:fadein 0.25s ease-out; align-self:stretch; }
+  @keyframes fadein{ from{opacity:0; transform:translateY(3px);} to{opacity:1; transform:translateY(0);} }
+  .msg:not(.self):not(.system){ flex-direction:row-reverse; margin-left:auto; }
+
+  .avatar{
+    width:58px; height:58px; border-radius:50%; flex-shrink:0; margin-top:1px;
+    background:rgba(0,0,0,0.6); border:2px solid #000; box-shadow:0 0 6px var(--cyan);
+    object-fit:cover; display:flex; align-items:center; justify-content:center;
+    font-size:19px; font-weight:700; color:var(--cyan); font-family:'Orbitron',sans-serif;
+  }
+  .msg.corrupted .avatar{ box-shadow:0 0 9px var(--red); }
+  .msg-col{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start; }
+  .msg:not(.self) .msg-col{ align-items:flex-end; }
+  .msg .meta{ font-size:15px; color:var(--muted); margin-bottom:3px; display:flex; align-items:center; gap:7px; }
+  .msg .meta .name{ color:var(--cyan); font-weight:700; }
+  .msg.self .meta .name{ color:var(--green); }
+  .msg.corrupted .meta .name{ color:var(--red); text-shadow:0 0 4px var(--red); }
+  .msg.system{ color:var(--muted); font-size:12px; }
+  .msg.system .meta{display:none;}
+  .del-btn{
+    background:none; border:none; color:var(--muted); font-size:10px; cursor:pointer;
+    padding:0 2px; line-height:1; font-family:'Inter',sans-serif;
+  }
+  .del-btn:hover{ color:var(--red); }
+  .msg .body{
+    white-space:pre-wrap; word-break:break-word; display:inline-block; max-width:100%;
+    padding:12px 16px; border:2px solid #000; font-size:29px; line-height:1.3;
+  }
+  .msg.self .body{
+    border-radius:14px 14px 14px 4px;
+    background:rgba(57,255,136,0.07); box-shadow:0 0 4px rgba(57,255,136,0.2);
+  }
+  .msg:not(.self):not(.system) .body{
+    border-radius:14px 14px 4px 14px;
+    background:rgba(0,255,242,0.05); box-shadow:0 0 4px rgba(0,255,242,0.15);
+  }
+  .msg.system .body{ background:none; border:none; box-shadow:none; padding:0; }
+  .msg.corrupted .body{
+    color:var(--red); text-transform:uppercase; letter-spacing:0.01em;
+    background:rgba(255,8,68,0.07); border-color:#000;
+    text-shadow:0 0 6px rgba(255,8,68,0.7);
+    animation:creep 3.2s infinite ease-in-out;
+  }
+  @keyframes creep{
+    0%,100%{ transform:translate(0,0) skew(0deg); opacity:1; text-shadow:0 0 6px rgba(255,8,68,0.7); }
+    45%{ transform:translate(0.5px,-0.5px) skew(-0.5deg); opacity:0.9; }
+    50%{ transform:translate(-0.7px,0.4px) skew(0.4deg); opacity:1; text-shadow:0 0 12px rgba(255,8,68,1); }
+    55%{ transform:translate(0,0); opacity:1; }
+  }
+
+  #status{ font-size:11px; color:var(--muted); padding:0 16px 6px; flex-shrink:0; }
+  #status.err{ color:var(--red); } #status.ok{ color:var(--green); }
+
+  form{
+    display:flex; gap:8px; padding:12px 16px; padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));
+    border-top:2px solid #000; box-shadow:0 -1px 0 var(--cyan); flex-shrink:0;
+  }
+  input[type=text]{
+    flex:1; background:#000; border:2px solid #000; color:var(--cyan);
+    padding:10px 12px; border-radius:8px; font-size:14.5px; font-family:'Inter',sans-serif;
+    box-shadow:0 0 4px rgba(0,255,242,0.3);
+  }
+  input[type=text]:focus{ outline:none; box-shadow:0 0 8px var(--cyan); }
+  input[type=text].corrupt-input{ color:var(--red); box-shadow:0 0 4px rgba(255,8,68,0.4); animation:input-flicker 2.6s infinite; }
+  @keyframes input-flicker{ 0%,94%,100%{box-shadow:0 0 4px rgba(255,8,68,0.4);} 95%{box-shadow:0 0 12px var(--red);} }
+  button[type=submit]{
+    background:var(--green); color:#000; border:2px solid #000; font-weight:700;
+    padding:0 18px; border-radius:8px; cursor:pointer; font-size:13px; font-family:'Inter',sans-serif;
+    box-shadow:0 0 6px var(--green);
+  }
+  button[type=submit]:disabled{ opacity:0.4; cursor:default; box-shadow:none; }
+
+  #avatarModal{ position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; padding:20px; background:rgba(0,0,0,0.55); }
+  #avatarModal.show{ display:flex; }
+  .modal-card{ width:100%; max-width:360px; border:2px solid #000; border-radius:16px; padding:22px 24px;
+    box-shadow:0 0 20px rgba(0,255,242,0.2); }
+  .modal-card h3{ margin:0 0 14px; font-family:'Orbitron',sans-serif; font-size:14px; color:var(--cyan); }
+  .modal-field{ margin-bottom:12px; text-align:left; }
+  .modal-field label{ display:block; font-size:11px; color:var(--muted); margin-bottom:5px; }
+  .modal-field input{
+    width:100%; background:#000; border:2px solid #000; color:var(--text);
+    padding:9px 10px; border-radius:7px; font-size:13px; font-family:'Inter',sans-serif;
+    box-shadow:0 0 4px rgba(0,255,242,0.25);
+  }
+  .modal-field input:focus{ outline:none; box-shadow:0 0 8px var(--cyan); }
+  .modal-actions{ display:flex; gap:8px; margin-top:6px; }
+  .modal-actions .lock-btn{ margin-bottom:0; }
+
+  body.corrupt-active{ --cyan:#ff0844; } /* reskins the whole page red while C0RR mode is on — everything else already references var(--cyan) */
+
+  /* ---------- polish: smooth reskin + motion everywhere ---------- */
+  body *{ transition: background-color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, color 0.35s ease; }
+
+  @keyframes breathe{ 0%,100%{ opacity:1; } 50%{ opacity:0.82; } }
+  #noiseBg{ animation:breathe 7s ease-in-out infinite; }
+
+  @keyframes dotpulse{ 0%,100%{ box-shadow:0 0 6px var(--green), 0 0 0 2px #000; transform:scale(1); } 50%{ box-shadow:0 0 12px var(--green), 0 0 0 2px #000; transform:scale(1.15); } }
+  header h1 .dot{ animation:dotpulse 2.2s ease-in-out infinite; }
+
+  @keyframes cardIn{ from{ opacity:0; transform:scale(0.93) translateY(10px); } to{ opacity:1; transform:scale(1) translateY(0); } }
+  .lock-card{ animation:cardIn 0.35s ease-out; }
+  .acct-card{ animation:cardIn 0.3s ease-out backwards; }
+  .acct-card:nth-child(1){ animation-delay:0.05s; }
+  .acct-card:nth-child(2){ animation-delay:0.12s; }
+  .acct-card:nth-child(3){ animation-delay:0.19s; }
+  .acct-card:hover{ transform:translateY(-2px) scale(1.015); }
+
+  .pill-btn{ transition:transform 0.15s, box-shadow 0.15s, color 0.15s; }
+  .pill-btn:hover{ transform:translateY(-1px); }
+  .pill-btn:active{ transform:scale(0.95); }
+
+  .avatar{ transition:transform 0.18s ease, box-shadow 0.3s ease; }
+  .msg:hover .avatar{ transform:scale(1.08); }
+
+  button[type=submit]{ transition:transform 0.1s ease, filter 0.15s ease; }
+  button[type=submit]:hover{ filter:brightness(1.1); }
+  button[type=submit]:active{ transform:scale(0.93); }
+
+  .switch{ transition:border-color 0.2s, box-shadow 0.2s; }
+  .switch:active .knob{ width:22px; }
+  .switch.mini:active .knob{ width:17px; }
+
+  @media (prefers-reduced-motion: reduce){
+    .msg, .msg.corrupted .body, .switch.active, .corrupt-input,
+    #noiseBg, header h1 .dot, .lock-card, .acct-card{ animation:none; }
+  }
+</style>
 </head>
-
 <body>
 
-    <main class="login">
-        <h1>FRIENDROOM</h1>
+<canvas id="noiseBg"></canvas>
 
-        <p>Private friend chat</p>
+<div id="lockScreen">
+  <div class="lock-card glass">
+    <div id="accountView" class="view show">
+      <h2 class="brand">SIGN IN AS</h2>
+      <p>choose your identity</p>
+      <div class="acct-list" id="acctList"></div>
+    </div>
+    <div id="keyView" class="view">
+      <h2 class="brand" id="keyViewTitle">PASSWORD</h2>
+      <p id="keyViewSub">enter the password for this account</p>
+      <input type="password" id="keyInput" placeholder="••••••••" autocomplete="off">
+      <button class="lock-btn" id="keySubmit" type="button">unlock</button>
+      <button class="lock-btn ghost" id="keyBack" type="button">‹ back to accounts</button>
+      <div id="keyErr"></div>
+    </div>
+  </div>
+</div>
 
-        <input
-            id="email"
-            type="email"
-            placeholder="Email"
-        >
+<div id="app">
+  <header class="glass">
+    <h1 class="brand"><span class="dot"></span>chat</h1>
+    <div class="hdr-right">
+      <div class="toggle-wrap test" id="testWrap" style="display:none;">
+        <span class="toggle-label">TEST</span>
+        <button class="switch test" id="testBtn" type="button" role="switch" aria-checked="false"><span class="knob"></span></button>
+      </div>
+      <button id="profileBtn" class="pill-btn" type="button">avatar</button>
+      <button id="switchBtn" class="pill-btn" type="button">switch</button>
+      <div id="who"></div>
+    </div>
+  </header>
 
-        <input
-            id="password"
-            type="password"
-            placeholder="Password"
-        >
+  <div id="status">connecting...</div>
+  <div id="log"></div>
 
-        <button id="loginButton">
-            ENTER
-        </button>
+  <form id="composer">
+    <input type="text" id="msgInput" placeholder="say something..." autocomplete="off" maxlength="500">
+    <div class="toggle-wrap mini" id="toggleWrap" style="display:none;">
+      <span class="toggle-label">C0RR</span>
+      <button class="switch mini" id="corruptBtn" type="button" role="switch" aria-checked="false"><span class="knob"></span></button>
+    </div>
+    <button type="submit" id="sendBtn">send</button>
+  </form>
+</div>
 
-        <p id="error"></p>
-    </main>
+<div id="avatarModal">
+  <div class="modal-card glass">
+    <h3 class="brand">PROFILE PICTURES</h3>
+    <div class="modal-field">
+      <label>normal avatar image URL</label>
+      <input type="text" id="avatarInput" placeholder="https://...">
+    </div>
+    <div class="modal-field">
+      <label>c0rrupt10n avatar image URL</label>
+      <input type="text" id="corruptAvatarInput" placeholder="https://...">
+    </div>
+    <div class="modal-actions">
+      <button class="lock-btn" id="avatarSave" type="button">save</button>
+      <button class="lock-btn ghost" id="avatarClose" type="button">close</button>
+    </div>
+  </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="app.js"></script>
+<script src="https://jsdelivr.net"></script>
 
+<script>
+// ====================== SUPABASE CONFIG ======================
+const SUPABASE_URL = "https://jovnakjxxdjnegxlzesv.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impvdm5ha2p4eGRqbmVneGx6ZXN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1ODIzNDUsImV4cCI6MjEwNTE1ODM0NX0.R-Z4SKJm0UUxp_HY0fFSyc0G7Zj85Q71ZQgeH_AoOAc";
+// ===============================================================
+
+// ---- per-account obfuscated passwords (not real security — view-source can still reveal them) ----
+// V3L0CIT13S -> test1, Saolsiorai -> test2, SparrowAirSS -> test3
+const ACCOUNTS = {
+  'V3L0CIT13S':   [84,69,83,84,49],
+  'Saolsiorai':   [84,69,83,84,50],
+  'SparrowAirSS': [84,69,83,84,51]
+};
+function codeFor(name){ return String.fromCharCode.apply(null, ACCOUNTS[name]); }
+function keyMatches(name, v){ return (v||'').trim().toUpperCase() === codeFor(name); }
+
+// ---- tiny synthesized sound system (no audio files — generated on the fly, works inside a published page) ----
+let _actx = null;
+function actx(){ if (!_actx) _actx = new (window.AudioContext || window.webkitAudioContext)(); return _actx; }
+function beep(freq, sweepTo, duration, type, gainVal){
+  try{
+    const ctx = actx();
+    const osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    if (sweepTo) osc.frequency.exponentialRampToValueAtTime(sweepTo, ctx.currentTime + duration);
+    g.gain.setValueAtTime(gainVal || 0.12, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + duration);
+  } catch(e){ /* audio not available, fail silently */ }
+}
+const sndSend      = () => beep(520, 760, 0.09, 'sine', 0.12);
+const sndDelete     = () => beep(380, 160, 0.12, 'sine', 0.12);
+const sndClick      = () => beep(600, null, 0.05, 'sine', 0.08);
+const sndCorruptOn  = () => beep(180, 70, 0.22, 'sawtooth', 0.1);
+const sndCorruptOff = () => beep(300, 520, 0.12, 'sine', 0.1);
+const sndUnlock     = () => beep(440, 880, 0.16, 'sine', 0.13);
+const sndError      = () => beep(200, 110, 0.2, 'square', 0.12);
+
+// ---- chat app state & elements (declared early: lock-screen code below calls into these) ----
+const logEl = document.getElementById('log');
+const statusEl = document.getElementById('status');
+const form = document.getElementById('composer');
+const input = document.getElementById('msgInput');
+const sendBtn = document.getElementById('sendBtn');
+const whoEl = document.getElementById('who');
+const corruptBtn = document.getElementById('corruptBtn');
+const toggleWrap = document.getElementById('toggleWrap');
+const testBtn = document.getElementById('testBtn');
+const testWrap = document.getElementById('testWrap');
+const profileBtn = document.getElementById('profileBtn');
+
+let username = null;
+let corruptMode = false;
+let testMode = false;
+let avatarUrl = localStorage.getItem('c0rrupt10n_avatar') || '';
+let corruptAvatarUrl = localStorage.getItem('c0rrupt10n_avatar_corrupt') || '';
+let supa = null;
+let connected = false;
+let messageCache = []; // raw rows; re-rendered fresh on every account switch so self/mine is always correct
+
+// ---- soft perlin-ish noise on near-black glass background; blue normally, red in corruption mode ----
+let noiseCorrupt = false;
+function drawNoise(corrupt){
+  noiseCorrupt = corrupt;
+  const c = document.getElementById('noiseBg');
+  const ctx = c.getContext('2d');
+  const W = c.width = window.innerWidth;
+  const H = c.height = window.innerHeight;
+  ctx.fillStyle = '#020202'; ctx.fillRect(0,0,W,H);
+  const tw = 7, th = 5;
+  const tiny = document.createElement('canvas'); tiny.width = tw; tiny.height = th;
+  const tctx = tiny.getContext('2d');
+  const img = tctx.createImageData(tw, th);
+  const rgb = corrupt ? [255,8,68] : [0,255,242];
+  for (let i=0;i<tw*th;i++){
+    const v = Math.random();
+    img.data[i*4] = rgb[0]; img.data[i*4+1] = rgb[1]; img.data[i*4+2] = rgb[2];
+    img.data[i*4+3] = Math.floor(v*v*(corrupt?85:75));
+  }
+  tctx.putImageData(img,0,0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(tiny,0,0,tw,th,0,0,W,H);
+  const g = ctx.createRadialGradient(W/2,H*0.4,0,W/2,H*0.4,Math.max(W,H)*0.75);
+  g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,0.6)');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+}
+drawNoise(false);
+let resizeT;
+window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(()=>drawNoise(noiseCorrupt),150); });
+
+const keyInput = document.getElementById('keyInput');
+const keySubmit = document.getElementById('keySubmit');
+const keyBack = document.getElementById('keyBack');
+const keyErr = document.getElementById('keyErr');
+const keyView = document.getElementById('keyView');
+const keyViewTitle = document.getElementById('keyViewTitle');
+const keyViewSub = document.getElementById('keyViewSub');
+const acctView = document.getElementById('accountView');
+const acctList = document.getElementById('acctList');
+const lockScreen = document.getElementById('lockScreen');
+const appEl = document.getElementById('app');
+
+const ACCOUNT_NAMES = Object.keys(ACCOUNTS);
+let pendingAccount = null;
+
+function showAccountPicker(){
+  keyView.classList.remove('show'); acctView.classList.add('show');
+  acctList.innerHTML = '';
+  ACCOUNT_NAMES.forEach(name => {
+    const card = document.createElement('button');
+    card.type = 'button'; card.className = 'acct-card';
+    card.innerHTML = '<div class="acct-avatar">'+name.slice(0,2).toUpperCase()+'</div>'+
+      '<div><div class="acct-name brand">'+name+'</div><div class="acct-sub">tap to sign in</div></div>';
+    card.onclick = () => { sndClick(); selectAccount(name); };
+    acctList.appendChild(card);
+  });
+}
+
+function selectAccount(name){
+  pendingAccount = name;
+  acctView.classList.remove('show'); keyView.classList.add('show');
+  keyViewTitle.textContent = name;
+  keyViewSub.textContent = 'enter the password for this account';
+  keyInput.value = ''; keyErr.textContent = '';
+  keyInput.focus();
+}
+keyBack.onclick = () => { pendingAccount = null; showAccountPicker(); };
+
+function attemptUnlock(){
+  if (!pendingAccount) return;
+  if (keyMatches(pendingAccount, keyInput.value)){
+    sndUnlock();
+    signInAs(pendingAccount);
+  } else {
+    sndError();
+    keyErr.textContent = 'incorrect password';
+    keyInput.classList.remove('shake'); void keyInput.offsetWidth; keyInput.classList.add('shake');
+  }
+}
+keySubmit.onclick = attemptUnlock;
+keyInput.addEventListener('keydown', e => { if (e.key === 'Enter') attemptUnlock(); });
+
+function signInAs(name){
+  username = name;
+  lockScreen.classList.add('hidden');
+  appEl.classList.add('show');
+  renderWho();
+  setupToggles();
+  renderAllMessages(); // re-evaluate self/mine + left-right for the account we just switched to
+  if (!supa) init();
+}
+
+document.getElementById('switchBtn').onclick = () => {
+  sndClick();
+  lockScreen.classList.remove('hidden'); appEl.classList.remove('show');
+  showAccountPicker();
+};
+
+showAccountPicker(); // password required every time — no session bypass
+
+// ---- chat app behavior ----
+
+function setStatus(text, cls){ statusEl.textContent = text; statusEl.className = cls || ''; }
+function renderWho(){ whoEl.textContent = username; }
+function setupToggles(){
+  const isVelo = username === 'V3L0CIT13S';
+  testWrap.style.display = 'flex'; // test mode available to everyone now
+  toggleWrap.style.display = isVelo ? 'flex' : 'none';
+  if (!isVelo) setCorruptMode(false); // c0rrupt10n mode stays Velo-only
+}
+
+const avatarModal = document.getElementById('avatarModal');
+const avatarInput = document.getElementById('avatarInput');
+const corruptAvatarInput = document.getElementById('corruptAvatarInput');
+profileBtn.onclick = () => {
+  sndClick();
+  avatarInput.value = avatarUrl;
+  corruptAvatarInput.value = corruptAvatarUrl;
+  avatarModal.classList.add('show');
+};
+document.getElementById('avatarClose').onclick = () => { sndClick(); avatarModal.classList.remove('show'); };
+document.getElementById('avatarSave').onclick = () => {
+  sndClick();
+  avatarUrl = avatarInput.value.trim();
+  corruptAvatarUrl = corruptAvatarInput.value.trim();
+  localStorage.setItem('c0rrupt10n_avatar', avatarUrl);
+  localStorage.setItem('c0rrupt10n_avatar_corrupt', corruptAvatarUrl);
+  avatarModal.classList.remove('show');
+};
+
+function setCorruptMode(on){
+  corruptMode = on;
+  corruptBtn.classList.toggle('active', on);
+  corruptBtn.setAttribute('aria-checked', on ? 'true' : 'false');
+  toggleWrap.classList.toggle('active', on);
+  input.classList.toggle('corrupt-input', on);
+  input.placeholder = on ? "say something... or don't." : 'say something...';
+  document.body.classList.toggle('corrupt-active', on);
+  drawNoise(on);
+}
+corruptBtn.onclick = () => {
+  const next = !corruptMode;
+  setCorruptMode(next);
+  next ? sndCorruptOn() : sndCorruptOff();
+};
+
+testBtn.onclick = () => {
+  testMode = !testMode;
+  testBtn.classList.toggle('active', testMode);
+  testWrap.classList.toggle('active', testMode);
+  sndClick();
+};
+
+function addSystemLine(text){
+  const div = document.createElement('div'); div.className = 'msg system';
+  const col = document.createElement('div'); col.className = 'msg-col';
+  const body = document.createElement('div'); body.className = 'body'; body.textContent = '// ' + text;
+  col.appendChild(body); div.appendChild(col); logEl.appendChild(div); scrollToBottom();
+}
+function initials(name){ return (name || '?').trim().slice(0,2).toUpperCase(); }
+function scrollToBottom(){ logEl.scrollTop = logEl.scrollHeight; }
+
+function addMessage(row){
+  const mine = row.username === username;
+  const corrupted = !!row.corrupted;
+  const div = document.createElement('div');
+  div.className = 'msg' + (mine ? ' self' : '') + (corrupted ? ' corrupted' : '');
+  div.dataset.id = row.id != null ? row.id : ('local-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+  const avatar = document.createElement(row.avatar_url ? 'img' : 'div');
+  avatar.className = 'avatar';
+  if (row.avatar_url){ avatar.src = row.avatar_url; avatar.onload = scrollToBottom; avatar.onerror = () => { avatar.style.display='none'; }; }
+  else { avatar.textContent = initials(row.username); }
+  const col = document.createElement('div'); col.className = 'msg-col';
+  const meta = document.createElement('div'); meta.className = 'meta';
+  const t = row.created_at ? new Date(row.created_at) : new Date();
+  const displayName = corrupted ? 'C0RRUPT10N' : row.username;
+  meta.innerHTML = '<span class="name">' + escapeHtml(displayName) + '</span> · ' +
+    t.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  if (mine){
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button'; delBtn.className = 'del-btn'; delBtn.textContent = '✕';
+    delBtn.title = 'delete message';
+    delBtn.onclick = () => deleteMessage(div.dataset.id, div);
+    meta.appendChild(delBtn);
+  }
+  const body = document.createElement('div'); body.className = 'body'; body.textContent = row.content;
+  if (corrupted) body.dataset.original = row.content;
+  col.appendChild(meta); col.appendChild(body);
+  div.appendChild(avatar); div.appendChild(col);
+  logEl.appendChild(div); scrollToBottom();
+}
+function escapeHtml(s){ const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function cacheAndRender(row){
+  if (row.id != null && messageCache.some(r => r.id === row.id)) return; // avoid dupes (e.g. own insert echoed back)
+  messageCache.push(row);
+  addMessage(row);
+}
+
+function renderAllMessages(){
+  logEl.innerHTML = '';
+  messageCache.forEach(row => addMessage(row));
+  scrollToBottom();
+}
+
+function removeMessageEl(id){
+  messageCache = messageCache.filter(r => String(r.id) !== String(id));
+  const el = document.querySelector('.msg[data-id="' + CSS.escape(String(id)) + '"]');
+  if (el) el.remove();
+}
+
+async function deleteMessage(id, div){
+  if (typeof id === 'string' && id.startsWith('local-')){
+    sndDelete(); removeMessageEl(id);
+    return;
+  }
+  if (!supa){ sndDelete(); removeMessageEl(id); return; }
+  const { error } = await supa.from('messages').delete().eq('id', id);
+  if (error){ addSystemLine('delete failed: ' + error.message); }
+  else { sndDelete(); removeMessageEl(id); }
+}
+
+const GLITCH_CHARS = '¥#$%&*!?';
+setInterval(() => {
+  document.querySelectorAll('.msg.corrupted .body').forEach(el => {
+    const orig = el.dataset.original;
+    if (!orig || orig.length < 2) return;
+    const chars = orig.split('');
+    const i = Math.floor(Math.random() * chars.length);
+    chars[i] = GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)];
+    el.textContent = chars.join('');
+    setTimeout(() => { el.textContent = orig; }, 160);
+  });
+}, 2200);
+
+async function init(){
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.includes("PASTE_YOUR")){
+    setStatus('not connected — flip TEST mode to preview, or add your Supabase key in the code', 'err');
+    return;
+  }
+  supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  setStatus('loading messages...');
+  const { data, error } = await supa.from('messages').select('*').order('created_at', { ascending: true }).limit(100);
+  if (error){ setStatus('error loading messages: ' + error.message, 'err'); addSystemLine('failed to reach the messages table: ' + error.message); return; }
+  connected = true;
+  data.forEach(row => cacheAndRender(row));
+  setStatus('connected', 'ok');
+  addSystemLine('connection established');
+  supa.channel('messages-realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => cacheAndRender(payload.new))
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, (payload) => {
+      if (payload.old && payload.old.id != null) removeMessageEl(payload.old.id);
+    })
+    .subscribe();
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text) return;
+  const activeAvatar = corruptMode ? corruptAvatarUrl : avatarUrl;
+
+  if (testMode){
+    input.value = '';
+    const localId = 'local-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+    cacheAndRender({ id: localId, username, content: text, corrupted: corruptMode, avatar_url: activeAvatar || null, created_at: new Date().toISOString() });
+    sndSend();
+    return;
+  }
+  if (!connected || !supa){
+    addSystemLine('not connected to Supabase yet — nothing was sent.' + (username==='V3L0CIT13S' ? ' (flip TEST mode to preview locally)' : ''));
+    return;
+  }
+  input.value = '';
+  const { error } = await supa.from('messages').insert({ username, content: text, corrupted: corruptMode, avatar_url: activeAvatar || null });
+  if (error){ addSystemLine('send failed: ' + error.message); sndError(); }
+  else { sndSend(); }
+});
+</script>
 </body>
 </html>
